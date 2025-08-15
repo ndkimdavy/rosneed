@@ -1,0 +1,1385 @@
+===========================
+# Documentation résumé ROS2
+===========================
+# Creation package
+C++: ros2 pkg create --build-type ament_cmake --license Apache-2.0 --node-name my_node my_package
+Python: ros2 pkg create --build-type ament_python --license Apache-2.0 --node-name my_node my_package
+# le faire régulièrement lors de la creation workspace ou bien au téléchargement d'un package externe
+# cd if you're still in the ``src`` directory with the ``ros_tutorials`` clone
+cd ..
+rosdep install -i --from-path src --rosdistro jazzy -y
+
+# La commande rosdep check --from-paths src --ignore-src est utilisée pour vérifier que toutes les dépendances 
+  nécessaires à tes packages ROS sont installées.
+  
+  Voir les packages manquants
+	rosdep check --from-paths src --ignore-src -y
+	
+  Installer les packages manquants
+	rosdep install --from-paths src --ignore-src -r -y
+
+# Vérifiez si il y a du changement apres affectation de nouvelle source "source install/local_setup.bash" avant de lancer le node
+env | grep AMENT
+par défaut: AMENT_PREFIX_PATH=/opt/ros/jazzy
+
+# La commande ros2 pkg executables te permet de lister 
+  tous les exécutables associés à un package ROS 2 spécifique. Voici comment l'utiliser :
+- ros2 pkg executables <nom_du_package> 
+- ls $(ros2 pkg prefix <nom_du_package>)/lib/<nom_du_package>
+
+# Chercher un file ou library exemple
+find /opt/ros/$ROS_DISTRO/lib -name "libgz_ros2_control*"
+find /opt/ros/$ROS_DISTRO/lib -name <cible>
+
+# Trouver le chemin du Package avec ros2 pkg prefix
+ros2 pkg prefix <nom_du_package>
+
+# Chercher le Fichier de Lancement :
+find $(ros2 pkg prefix turtle_tf2_py) -name "turtle_tf2_demo.launch.py"
+
+# Rechercher les Fichiers de Lancement pkg précis:
+ ls $(ros2 pkg prefix --share turtle_tf2_py)/launch
+
+# Pour créer un lien symbolique sous Linux
+ln -s <chemin_du_fichier_ou_répertoire_cible> <nom_du_lien_symbolique>
+
+# ROS2 construire un package
+	colcon build 
+	# Avec une ref de lien dans install
+		colcon build --symlink-install
+	# Builder un package specifique
+		colcon build --packages-select YOUR_PKG_NAME --symlink-install
+
+# Lancer un test
+	colcon test
+	# si vous souhaitez spécifier le package de test
+		colcon test --packages-select YOUR_PKG_NAME --ctest-args -R YOUR_TEST_IN_PKG
+ 
+
+# CMake peut builder pour python aussi pour C++ (https://docs.ros.org/en/jazzy/How-To-Guides/Ament-CMake-Python-Documentation.html)
+  Pour module python voir aussi(https://index.ros.org/p/ament_cmake_python/)
+  ament_cmake_python est un package qui fournit des fonctions CMake pour les packages de ament_cmaketype build qui contiennent du code Python. 
+  ament_cmake_python ne doit être utilisé que dans les cas où cela n'est pas possible, comme lors du mélange de code C/C++ et Python.
+
+# Lister tous les topics
+ros2 topic list
+
+# Obtenir des infos sur le topic cmd_vel
+ros2 topic info /turtle1/cmd_vel
+
+# Écho des messages en temps réel
+ros2 topic echo /turtle1/cmd_vel
+
+# Vérifier le taux de publication
+ros2 topic hz /turtle1/cmd_vel
+
+# Afficher le type de message
+ros2 topic type /turtle1/cmd_vel
+
+# Publier des messages sur le topic 
+ros2 topic pub /mytopic space_interfaces/msg/Position "{x: 1.0, y: 2.0, z: 3.0, roll: 0.1, pitch: 0.2, yaw: 0.3}"
+ros2 topic pub nametopic std_msgs/msg/String "{data: Okk}"
+
+# Voir tout les interfaces presents
+ros2 interface list
+
+# Afficher la définition du message (ex pour: geometry_msgs/msg/Twist) ou de service 
+ros2 interface show geometry_msgs/msg/Twist
+
+# Afficher les services en cours
+ros2 service list
+
+# Afficher les services en cours et leurs types de services
+ros2 service list -t
+
+# Afficher le type de service
+ros2 service info /spawn ou ros2 service type /spawn
+
+# Afficher les informations sur node (msg/topic/service/action...)
+ros2 node info /turtlesim
+
+## TF2
+# Utilisation de view frames (sauvegarder en pdf les diagrammes de trames diffusées)
+ros2 run tf2_tools view_frames
+
+# Signale la transformation entre deux trames diffusées sur ROS
+ros2 run tf2_ros tf2_echo [source_frame] [target_frame]
+
+# Postulat (1)
+# ###########
+# Dans le context d'un vecteur P i/j (objet i par rapport objet j), on peut définir les termes
+# [source] et [target] comme suit:
+# 	source:
+			Cela fait référence à l'objet qui fournit le cadre de référence pour les coordonnées du vecteur.
+			Dans notre cas c'est le reperer de l'objet j
+# 	target: 
+			Cela représente l'objet dont vous souhaitez connaître la position ou l'orientation dans le cadre de référence de la source.
+			Dans notre cas c'est le reperer de l'objet i
+# Conclusion:
+			 P i/j <=> P target/source
+
+Où intervient l'URDF dans la communication
+------------------------------------------
+L'URDF est fourni en entrée au robot_state_publisher, qui utilise cette description pour générer les transformations (tf) basées sur les valeurs des joints reçues depuis joint_state_publisher.
+                                            +===========================+
+									        │  ┌─────────────────────┐  │ 
+									        │  │  URDF (robot.urdf)  │  │
+   actions externes                         │  └──────────+──────────┘  │
+		   │						        │             │             │
+           v                                │             v             │
+[joint_state_publisher] --(/joint_states)-----> [robot_state_publisher] │
+           ^                     │          │             │             │
+		   │                     │          │             v             │
+		   │					 v		    │		    (tf)            │
+		   │                  [rvivz]       │             │             │
+		   │                     ^          │             v             │
+		   │                     │          │         [tf tree]         │
+		   │                     │          +===========================+
+		   │                     │                        │
+           +--------------(/robot_description) <----------+
+			 
+
+# Utilisation des arguments (Pour éviter les avertissements sur les règles de remapping dépréciées, utilise la syntaxe appropriée pour les remappings.)
+
+ros2 run demo_nodes_cpp parameter_blackboard --ros-args -p some_int:=42 -p "a_string:=Hello world" -p "some_lists.some_integers:=[1, 2, 3, 4]" -p "some_lists.some_doubles:=[3.14, 2.718]"
+ros2 run simple_py simple_node --ros-args --param my_param:=10
+
+# Différence entre arguments et paramètres en ROS
+
+	-	Un paramètre est une variable utilisée dans la déclaration d'une fonction. "ex : def function(param1, param2) { ... }"
+		Les paramètres sont définis dans la signature de la fonction et servent de variables locales àPar exemple, dans ROS 2, YAML est utilisé pour spécifier les paramètres des nœuds (comme les valeurs de capteurs, les adresses de topic, ou les configurations de contrôleurs) dans un fichier externe, ce qui rend les nœuds plus flexibles et réutilisables. l'intérieur de la fonction.
+	
+	-	Un argument est une valeur fournie à une fonction lors de son appel. " function(val_arg1, val_arg2);
+		Les arguments sont les valeurs réelles passées à la fonction lors de son appel, correspondant aux paramètres définis dans la signature de la fonction.
+
+### Paramètres et configurations avec YAML (https://roboticsbackend.com/ros2-yaml-params/)
+	YAML est souvent utilisé pour configurer des systèmes logiciels, car il permet de stocker des paramètres sous un format lisible et facilement modifiable.
+	
+	Par exemple, dans ROS 2, YAML est utilisé pour spécifier les paramètres des nœuds (comme les valeurs de capteurs, les adresses de topic, ou les configurations de contrôleurs)
+	dans un fichier externe, ce qui rend les nœuds plus flexibles et réutilisables.
+ex:
+	my_node:
+		ros__parameters:
+			threshold: 10
+			sensor_frequency: 50.0
+
+	Deux méthodes pour définir un tableau dans YAML
+		C'est la méthode la plus courante et lisible
+			ex:
+				array_param:
+						- 1.0
+						- 2.0
+						- 3.0
+			ou
+				array_param: [1.0, 2.0, 3.0]
+				
+	La méthode avec des tirets est généralement préférée lorsque les listes sont longues ou que vous souhaitez une meilleure lisibilité.
+
+Sans yaml on le lancerait comme ceci le noeud
+ex:
+	"
+	ros2 run simple_cpp simple_node --ros-args \
+		--param bool_val:=true \
+		--param int_val:=42 \
+		--param float_val:=3.14 \
+		--param str_val:="Hello, World!" \
+		--param float_array:="[1.0, 2.0, 3.0]" \
+		--param byte_array:="[1, 2, 3]" \
+		--param nested.other_val1:=123 \
+		--param nested.other_val2:=456
+	"
+
+Pour démarrer le même nœud en utilisant vos valeurs de paramètres enregistrées, utilisez :
+	ros2 run <package_name> <executable_name> --ros-args --params-file <file_name>
+Lister toutes les paramètres en cours 
+	ros2 param list
+Paramètres en cours pour un node
+	ros2 param list /<nom_du_noeud>
+Modifier dynamiquement les paramètres d'un nœud ROS 2 pendant son exécution.
+	ros2 param set <nom_du_noeud> <nom_du_parametre> <valeur>
+	ex: ros2 param set /simple_node int_val 100
+Récupérer la valeur d'un paramètre d'un nœud ROS 2 en cours d'exécution.
+	ros2 param get <nom_du_noeud> <nom_du_parametre>
+	ex: ros2 param get /simple_node int_val
+Vous pouvez afficher toutes les valeurs de paramètres actuelles d'un nœud en utilisant la commande :
+	ros2 param dump <node_name>
+	Pour les enregistrer dans un fichier yaml pour les utiliser plus tard:
+		ros2 param dump <node_name> > <parameter_file>
+		ex:
+			ros2 param dump /turtlesim > turtlesim.yaml
+Vous pouvez charger des paramètres d'un fichier vers un nœud en cours d'exécution à l'aide de la commande :
+	ros2 param load <node_name> <parameter_file>
+
+
+
+## LifecycleNode | LifecycleService
+
+Un Lifecycle Node est une extension du nœud ROS 2 standard qui suit un cycle de vie prédéfini. Ce type de nœud est utile pour :
+	- Initialiser des ressources uniquement quand elles sont nécessaires.
+	- Effectuer un nettoyage propre lorsque le nœud est désactivé ou arrêté.
+	- Contrôler explicitement les états d'un nœud dans un système complexe.
+Un Lifecycle Node a plusieurs états, tels que unconfigured, inactive, active, et finalized, avec des transitions définies entre ces états.
+
+                                 create() (Constructeur de class)     
+                                    |
+                                    v
+                         +-----------------------+
+                         |    (Unconfigured)     |--------------------------+
+                         +-----------------------+<------------+            |
+                                    |                          |            |
+                        configure() |                          |          shutdown() 
+                                    v                          |            |
+                         +-----------------------+             |            |
+         +-------------->|      (Inactive)       |--------> cleanup()       |
+         |               +-----------------------+---+                      |
+         |                          |                |                      |
+         |               activate() |                |                      |
+         |                          v                |                      |
+         |               +-----------------------+   |                      |
+    deactivate() <-------|       (Active)        | shutdown()               |
+                         +-----------------------+   |                      |
+                                    |                |                      |
+                                    | shutdown()     |                      |
+                                    v                |                      |
+                         +-----------------------+   |                      |
+                         |      (Finalized)      |<--+----------------------+
+                         +-----------------------+
+                                    |
+				                    |
+								    v
+							    destroy() (Destructeur)
+
+-------------------------------------------------------------------------------------------------------------------
+| Aspect                 | Services                                  | Services de Paramètres                     |
+-------------------------------------------------------------------------------------------------------------------
+| Définition             | Mécanisme de communication synchrone      | Ensemble de services intégrés pour gérer   |
+|                        | demande-réponse entre nœuds.              | les paramètres des nœuds.                  |
+-------------------------------------------------------------------------------------------------------------------
+| Création               | Utilisation de `create_service` pour      | Pas besoin de définir des services;        | 
+|                        | définir des services personnalisés.       | ROS 2 les fournit automatiquement.         |
+|                        | Le client se crée avec `create_client`.   |                                            |
+-------------------------------------------------------------------------------------------------------------------
+| Objectif               | Exécuter des tâches spécifiques définies  | Configurer et ajuster les paramètres des   |
+|                        | par l’utilisateur.                        | nœuds.                                     |
+-------------------------------------------------------------------------------------------------------------------
+| Interaction            | Clients personnalisés envoient des        | Clients de paramètres utilisent            |
+|                        | requêtes spécifiques au service défini.   | `set_parameters` ou get_parameters         | 
+|                        |                                           | pour interagir.                            |
+-------------------------------------------------------------------------------------------------------------------
+| Personnalisation       | Hautement personnalisable selon les       | Standardisé avec des services définis par  |
+|                        | besoins de l’application.                 | ROS 2 pour la gestion des paramètres.      |
+-------------------------------------------------------------------------------------------------------------------
+| Exemples d’Utilisation | Ajouter deux nombres, démarrer une tâche, | Modifier la fréquence d’un topic, ajuster  |
+|                        | etc.                                      | un seuil de détection, etc.                |
+-------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+## URDF/Xacro (Préparation environnement) (https://aleksandarhaber.com/how-to-create-urdf-and-launch-files-in-ros2-and-display-them-in-rviz/)
+sudo apt install ros-<distro>-robot-state-publisher
+sudo apt install ros-<distro>-urdf-tutorial
+ sudo apt install ros-<distro>-xacro
+	-->>
+		ex:
+			sudo apt install ros-jazzy-urdf-tutorial
+			sudo apt install ros-jazzy-joint-state-publisher
+			sudo apt install ros-jazzy-xacro
+			
+# Vérifier si l' urdf valide
+check_urdf $(ros2 pkg prefix --share urdf_tutorial)/urdf/06-flexible.urdf
+
+
+### Gazebo 
+sudo apt install ros-jazzy-ros-gz  # (repos https://github.com/gazebosim/ros_gz)
+sudo apt install ros-jazzy-gz-ros2-control
+
+#Aide sur gazebo
+gz sim --help
+
+#Force l'utilisation du rendu logiciel au lieu du GPU.
+LIBGL_ALWAYS_SOFTWARE=1 gz sim -v 4 <filename.sdf>
+
+#Info sur comment faire un spawn (insertion) d'un model dans le simulateur gazebo
+ros2 run ros_gz_sim create --helpshort
+
+# Dans Gazebo il y a le serveur et le client
+	Gazebo Server (gzserver) :
+		C'est le moteur principal de simulation. Il exécute la physique, les capteurs, et les interactions entre objets. 
+		Il fonctionne en arrière-plan sans interface graphique.
+	Gazebo Client (gzclient) :
+		C'est l'interface graphique qui permet de visualiser la simulation. 
+		Il se connecte au serveur pour afficher les objets et l'environnement simulé en temps réel, mais il ne gère pas la simulation lui-même.
+	
+	ex:
+		gz sim --help
+		.....
+		...
+		 -g                           Run only the GUI.
+		.....
+		...
+		 -s                           Run only the server (headless mode). This
+		                              overrides -g, if it is also present.
+		.....
+
+	Ici on voit que l'option -g c'est pour le client et l'option -s pour le serveur
+	
+	ex:
+	
+		Dans un launcher:
+		    gzserver = IncludeLaunchDescription(
+							PythonLaunchDescriptionSource([PathJoinSubstitution([FindPackageShare("ros_gz_sim"), "launch", "gz_sim.launch.py"])]),
+							launch_arguments={"gz_args": ["-r -s -v4 ", world_path], "on_exit_shutdown": "true"}.items(),
+							condition=IfCondition(use_gz),
+						)
+						
+			gzclient = IncludeLaunchDescription(
+							PythonLaunchDescriptionSource([PathJoinSubstitution([FindPackageShare("ros_gz_sim"), "launch", "gz_client.launch.py"])]),
+							launch_arguments={"gz_args": ["-g -v4"]}.items(),
+							condition=IfCondition(use_gz),
+						)
+
+Convertir ou print urdf en sdf:
+	Print sdf:
+		gz sdf -p name.urdf
+	Convert sdf:
+		gz sdf -p name.urdf > name.sdf
+		
+Voir les services gazebo en cours:
+	gz service -l
+Information sur les services ex: service de nom /world/empty/create:
+	gz service -is /world/empty/create
+Help:
+	gz service -h
+	
+Spawn (insérer) un urdf dans le world avec le service /world/empty/create
+	gz service -s /world/empty/create --reqtype gz.msgs.EntityFactory --reptype gz.msgs.Boolean --timeout 1000 --req 'sdf_filename: "/path/to/model.urdf", name: "urdf_model"'
+	
+
+
+
+# 	Communication ROS2 sur le reseau 
+
+	Condition:
+		PC1 et PC2 sur meme reseau
+		avoir un retour entre:
+			PC1 
+				$ping <ip-PC2>
+			PC2
+				$ping <ip-PC1>
+		
+	
+	Configuration du Domaine ID pour ROS 2
+	Assurez-vous que <votre_domain_id> est le même sur PC1 et PC2 pour permettre une communication, par défaut le Domain ID est défini sur 0
+		export ROS_DOMAIN_ID=<votre_domain_id>
+		printenv | grep ROS
+	
+	DDS (Data Distribution Service) est un standard de middleware conçu pour la communication en temps réel et distribuée. 
+	DDS gère la communication distribuée en arrière-plan. Tous les nœuds de ROS 2 sont capables de se découvrir mutuellement et d'échanger des messages sans dépendre d'un serveur central.
+	Le ROS Domain ID permet de créer des espaces de communication isolés dans DDS pour éviter les interférences entre différents systèmes ROS 2 sur le même réseau.
+	
+	
+
+
+# 	ros_gz_bridge
+
+	package ros_gz_bridge sert à relier les systèmes ROS 2 et Gazebo en créant des ponts entre :
+		- Topics ROS 2 et topics Gazebo.
+		- Services ROS 2 et services Gazebo.
+	La commande help pour les infos d'utilisation du node parameter_bridge de ros_gz_bridge:
+ 
+	ros2 run ros_gz_bridge parameter_bridge -h
+
+	La commande pour créer un pont suit la structure suivante :
+	ros2 run ros_gz_bridge parameter_bridge <ros_topic>@<ROS2_type><direction><Gazebo_type>
+	
+	!!! Attention en ligne de commande :	Le nom du topic Gazebo est automatiquement dérivé du nom du topic ROS 2(vice versa) 
+											Si les noms sont différents, utilisez le remapping dans ROS 2 pour adapter le nom du topic à celui de gazebo
+	
+	Explication :
+	ros_topic : Nom du topic côté ROS 2.
+	ROS2_type : Type du message côté ROS 2 (par exemple, std_msgs/msg/Int32).
+	direction : La direction de la communication :
+	@ : Pont bidirectionnel (ROS 2 ↔ Gazebo).
+	[ : Pont unidirectionnel Gazebo → ROS 2.
+	] : Pont unidirectionnel ROS 2 → Gazebo.
+	Gazebo_type : Type du message côté Gazebo (par exemple, gz.msgs.Int32).
+	
+	exemple:
+		ros2 run ros_gz_bridge parameter_bridge /keyboard/keypress@std_msgs/msg/Int32@gz.msgs.Int32
+	
+	Lister les topics disponibles
+		Gazebo:
+			gz topic -l
+		ROS2:
+			ros2 topic list
+	Vérifier le type d’un topic
+		Gazebo:
+			gz topic -i -t /topic_name
+		ROS2:
+			ros2 topic info /topic_name
+	Écouter les messages:
+		Gazebo :
+			gz topic -e -t /topic_name
+		ROS2:
+			ros2 topic echo /topic_name
+
+	En YAML 
+		En YAML, en définissant les paramètres dans le fichier, il est possible d'utiliser 
+		des topics de noms différents, de types compatibles pour établir un pont avec ros_gz_bridge.
+	
+	ex fichier.yaml:
+		- ros_topic_name: "scan"
+		  gz_topic_name: "/scan"
+		  ros_type_name: "sensor_msgs/msg/LaserScan"
+		  gz_type_name: "gz.msgs.LaserScan"
+		  direction: GZ_TO_ROS  # BIDIRECTIONAL or ROS_TO_GZ
+		  
+	Le fichier de configuration est un fichier YAML qui contient le mappage entre les rubriques ROS et Gazebo à relier. 
+	Pour chaque paire de rubriques à relier, les paramètres suivants sont acceptés :
+	
+		ros_topic_name:Le nom du sujet côté ROS.
+		gz_topic_name:Le nom du sujet correspondant du côté du Gazebo.
+		ros_type_name:Le type de ce sujet ROS.
+		gz_type_name:Le type de ce sujet Gazebo.
+		subscriber_queue:La taille de la file d'attente des abonnés ROS.
+		publisher_queue: La taille de la file d'attente de l'éditeur ROS.
+		lazy:Qu'il y ait ou non un abonné paresseux. S'il n'y a pas de véritables abonnés, le pont ne créera pas non plus d'abonnés internes. Cela devrait accélérer les performances.
+		direction:Il est possible de spécifier GZ_TO_ROS, ROS_TO_GZet BIDIRECTIONAL.
+		
+	Lancement du launcher
+		ros2 launch ros_gz_bridge ros_gz_bridge.launch.py name:=ros_gz_bridge config_file:=<path_to_your_YAML_file>
+		
+#	ROS2 Control
+	Installation:
+		sudo apt install ros-jazzy-ros2-control ros-jazzy-ros2-controllers
+		
+		!!!Dans gazebo: sudo apt install ros-jazzy-gz-ros2-control
+		
+	Explication du schema d'architecture de ros2-control https://control.ros.org/jazzy/doc/getting_started/getting_started.html
+		
+		Contrôleurs
+		-----------
+			* Controller A, B et C:	Ces contrôleurs sont des modules logiciels qui génèrent des commandes pour les actionneurs du robot.
+									Chaque contrôleur peut avoir une responsabilité différente, comme contrôler la position, la vitesse, ou l'effort.
+		
+			* Chargement des contrôleurs: Les contrôleurs sont chargés par le Controller Manager, qui s'assure que les interfaces nécessaires sont disponibles.
+		
+			* Gestion des interfaces: Les contrôleurs demandent des interfaces spécifiques (comme des interfaces de commande ou d'état) au Controller Manager pour interagir avec le matériel.
+	
+		Controller Manager
+		------------------
+			*	Le Controller Manager est un composant central qui gère les contrôleurs. Il est responsable de :
+					-	Charger et décharger les contrôleurs.
+					-	Gérer les interfaces demandées par les contrôleurs.
+					-	S'assurer que les ressources matérielles sont utilisées correctement sans conflit entre les contrôleurs.
+		
+		Resource Manager
+		----------------
+			*	Le Resource Manager gère l'accès aux ressources matérielles. Il fait le lien entre les contrôleurs et le matériel (capteurs, actionneurs, systèmes).
+			*	Il est responsable de :
+					-	Assigner les interfaces (interfaces d'état et de commande) aux contrôleurs qui les demandent.
+					-	Gérer les ressources pour s'assurer que chaque composant matériel peut être contrôlé de manière efficace et sûre.
+			*	Utilise les informations du URDF pour comprendre la structure du robot et gérer les interfaces matérielles de manière appropriée. 
+				Par exemple, il sait quels actionneurs contrôlent quelles articulations et quels capteurs fournissent des données sur l'état de ces articulations.
+		Interfaces
+		----------
+			*	State interface (interface d'état) : Une interface qui permet aux contrôleurs de lire l'état des capteurs ou des actionneurs (exemple : position actuelle d'une articulation). Elle est en lecture seule.
+			*	Command interface (interface de commande) : Une interface qui permet aux contrôleurs de lire et écrire des commandes pour les actionneurs (exemple : définir une position cible pour un moteur). Elle est en lecture/écriture.
+			
+		Ressources matérielles (Hardware Resources)
+		------------------------------------------
+			*	Sensor (Capteur) : Un composant qui mesure des données physiques, comme la température ou l'angle d'une articulation.
+			*	System (Système) : Une combinaison de capteurs et d'actionneurs. Cela peut représenter un sous-système complexe du robot.
+			*	Actuator (Actionneur) : Un composant qui exécute des commandes physiques, comme un moteur ou un servomoteur.
+			*	Ces ressources matérielles sont gérées par le Resource Manager et fournissent des interfaces d'état et de commande.
+			
+	
+	
+	Quand utiliser un composant matériel de type "Système" ?
+	--------------------------------------------------------
+	Un composant "Système" dans ROS2 Control est recommandé lorsque :
+
+		- Plusieurs éléments matériels (actionneurs, capteurs) sont contrôlés via un canal de communication unique.
+		Exemple : Bus I2C, SPI, UART, ou CAN.
+		- Vous souhaitez centraliser la gestion des composants pour simplifier le code.
+		- Les composants (actionneurs et capteurs) sont étroitement intégrés au matériel physique et ne nécessitent pas d’être modélisés individuellement.
+		- Le matériel possède une logique embarquée permettant de regrouper les commandes ou les lectures de plusieurs éléments.
+											
+						+---------------+						+-------+
+	12 Servos <--x12--> | MODULE DRIVER | <--- UART/CAN/SPI---> | RASPI |
+						+---------------+						+-------+
+											(ROS2_Control: Hardware_interface::System)
+											
+										URDF:
+											......
+											<ros2_control name="MyCompRobot" type="system">
+											....
+											..
+											...
+											</ros2_control>
+											
+	1 Servo  <--+
+				|				 
+				|										+-------+
+	1 Servo  <--+-----x3-----> UART/CAN/SPI-----x3----->| RASPI |
+				|										+-------+
+				|						 	(ROS2_Control: Hardware_interface::Actuator)
+	1 Servo  <--+											
+	
+										URDF:
+											......
+											<ros2_control name="MyCompRobot" type="actuator">
+											....
+											..
+											...
+											</ros2_control>
+
+	1 Capt.T° >--+
+				 |				 
+				 |										+-------+
+	1 Capt.T° >--+---x3-----> UART/CAN/SPI-----x3----->	| RASPI |
+				 |										+-------+
+				 |						(ROS2_Control: Hardware_interface::Sensor)
+	1 Camera  >--+											
+	
+										URDF:
+											......
+											<ros2_control name="MyCompRobot" type="sensor">
+											....
+											..
+											...
+											</ros2_control>
+	
+	
+
+Les interfaces d'état des articulations peuvent être publiées sous forme de sujet ROS au moyen de joint_state_broadcaster
+
+Pour structurer un fichier YAML propre et général en ROS2 (notamment pour le Controller Manager et les contrôleurs), voici une méthode claire et bien organisée.
+
+	# Paramètres pour le Controller Manager
+	controller_manager:
+	  ros__parameters:
+		update_rate: 100  # Fréquence de mise à jour du Controller Manager (en Hz)
+		# Liste des contrôleurs gérés
+		joint_trajectory_controller:
+			type: "joint_trajectory_controller/JointTrajectoryController"
+		position_controller:
+			type: "position_controllers/JointPositionController"
+		effort_controller:
+			type: "effort_controllers/JointEffortController"
+
+	# Paramètres pour le Joint Trajectory Controller
+	joint_trajectory_controller:
+	  ros__parameters:
+		joints:
+		  - joint1
+		  - joint2
+		  - joint3
+		state_interfaces: ["position", "velocity"]  # Interfaces pour lire l'état
+		command_interfaces: ["position"]  # Interfaces pour envoyer des commandes
+		interpolation_method: "linear"  # Méthode d'interpolation pour les trajectoires
+		allow_partial_joints_goal: true  # Permet des commandes partielles
+
+	# Paramètres pour un Position Controller
+	position_controller:
+	  ros__parameters:
+		joints:
+		  - joint4
+		state_interfaces: ["position"]
+		command_interfaces: ["position"]
+
+	# Paramètres pour un Effort Controller
+	effort_controller:
+	  ros__parameters:
+		joints:
+		  - joint5
+		  - joint6
+		state_interfaces: ["effort"]
+		command_interfaces: ["effort"]
+
+Autre exemple:
+	controller_manager:
+	  ros__parameters:
+		update_rate: 100
+		joint_trajectory_controller:
+		type: "joint_trajectory_controller/JointTrajectoryController"
+
+	joint_trajectory_controller:
+	  ros__parameters:
+		joints:
+		  - joint1
+		  - joint2
+		  - joint3
+		  - joint4
+		  - joint5
+		  - joint6
+
+		command_interfaces:
+		  - position
+
+		state_interfaces:
+		  - position
+		  - velocity
+
+		action_monitor_rate: 20.0
+
+		allow_partial_joints_goal: false
+		open_loop_control: true
+		constraints:
+		  stopped_velocity_tolerance: 0.01
+		  goal_time: 0.0
+		  joint1:
+			trajectory: 0.05
+			goal: 0.03
+					
+					
+	Exemple quadrupede 12DOF
+
+	# Paramètres du Controller Manager
+	controller_manager:
+	  ros__parameters:
+		update_rate: 200  # Fréquence à 200 Hz
+		controllers:
+			leg_trajectory_controller:
+				type: "joint_trajectory_controller/JointTrajectoryController"
+			torso_position_controller:
+				type: "position_controllers/JointPositionController"
+			leg_effort_controller:
+				type: "effort_controllers/JointEffortController"
+			
+
+	# Contrôleur de trajectoire pour les jambes
+	leg_trajectory_controller:
+	  ros__parameters:
+		joints:  # Liste des 12 articulations (3 par patte)
+		  - front_left_hip
+		  - front_left_knee
+		  - front_left_ankle
+		  - front_right_hip
+		  - front_right_knee
+		  - front_right_ankle
+		  - rear_left_hip
+		  - rear_left_knee
+		  - rear_left_ankle
+		  - rear_right_hip
+		  - rear_right_knee
+		  - rear_right_ankle
+		state_interfaces: ["position", "velocity"]  # Retour d'état : position et vitesse
+		command_interfaces: ["position"]  # Commandes envoyées : position cible
+		interpolation_method: "cubic"  # Interpolation des trajectoires
+		allow_partial_joints_goal: false  # Les commandes partielles ne sont pas autorisées
+
+	# Contrôleur de position pour le torse
+	torso_position_controller:
+	  ros__parameters:
+		joints:
+		  - torso_pitch
+		  - torso_yaw
+		state_interfaces: ["position"]
+		command_interfaces: ["position"]
+
+	# Contrôleur d'effort pour les jambes (optionnel)
+	leg_effort_controller:
+	  ros__parameters:
+		joints:
+		  - front_left_hip
+		  - front_left_knee
+		  - front_left_ankle
+		  - front_right_hip
+		  - front_right_knee
+		  - front_right_ankle
+		  - rear_left_hip
+		  - rear_left_knee
+		  - rear_left_ankle
+		  - rear_right_hip
+		  - rear_right_knee
+		  - rear_right_ankle
+		state_interfaces: ["effort"]  # Retour d'état : effort (couple ou force)
+		command_interfaces: ["effort"]  # Commandes envoyées : effort
+
+
+	rqt_joint_trajectory_controller est un plugin GUI pour RQT, conçu pour commander un JointTrajectoryController dans un système ROS2.
+	Il fournit une interface visuelle qui permet de contrôler facilement les articulations d'un robot en envoyant des commandes de trajectoire.
+	(https://control.ros.org/jazzy/doc/ros2_controllers/rqt_joint_trajectory_controller/doc/userdoc.html)
+	
+	
+	
+	PID: kp e + ki I(e) + k D(e) avec e = E-S
+	Avec Feed-Forward : kff v + PID  
+						kff v + kp e + ki I(e) + k D(e)
+		avec v: représente la vitesse cible de l'articulation, pré-calculée définie par le contrôleur ou provenant directement de la trajectoire spécifiée grace à l'interpolation(linear, spline, cubic, ...etc)
+			avantage:
+				- Le contrôle feed-forward permet d'anticiper les efforts nécessaires, réduisant les délais liés au feedback.
+				(Voir comme une compensation de l'amortissement/resistance Fdamping = -b v)
+			inconvenient:
+				- Nécessité d'un modèle précis / Moins utile pour des systèmes incertains 
+				- Difficile à ajuster
+		
+	
+	ex:
+		joint_trajectory_controller:
+		  ros__parameters:
+			type: "joint_trajectory_controller/JointTrajectoryController"
+			joints:
+			  - joint1
+			  - joint2
+			state_interfaces: ["position", "velocity"]
+			command_interfaces: ["position"]
+			interpolation_method: "cubic"
+			gains:
+			  joint1:
+				p: 10.0
+				i: 0.5
+				d: 1.0
+				i_clamp: 1.0
+				ff_velocity_scale: 0.1  # Feed-forward basé sur la vitesse
+			  joint2:
+				p: 15.0
+				i: 0.8
+				d: 1.2
+				i_clamp: 1.5
+				ff_velocity_scale: 0.2  # Plus élevé pour des ajustements rapides
+
+	i_clamp/i_clamp_min et i_clamp_max sont utilisés dans un PID Controller pour limiter l'accumulation de l'intégrale (∫e(t)dt) afin d'éviter les dépassements ou des comportements instables causés par une surcharge intégrale.
+		- i_clamp impose des limites sur l'accumulation de l'intégrale.
+		- i_clamp_min/i_clamp_max définissent les bornes supérieures et inférieures pour l'effet intégral 
+	
+	ex:
+		joint_trajectory_controller:
+		  ros__parameters:
+			type: "joint_trajectory_controller/JointTrajectoryController"
+			joints:
+			  - joint1
+			gains:
+			  joint1:
+				p: 10.0
+				i: 0.5
+				d: 1.0
+				ff_velocity_scale: 0.1
+				i_clamp_max: 5.0  # Limite supérieure pour l'intégrale
+				i_clamp_min: -5.0  # Limite inférieure pour l'intégrale
+
+	
+	Le Forward Command Controller dans ROS2 est un contrôleur minimaliste utilisé pour transmettre directement des commandes aux interfaces de commande d’un robot. 
+	Contrairement à des contrôleurs complexes comme le JointTrajectoryController, il ne génère aucune logique interne (comme des interpolations ou des calculs de PID) et se contente de relayer les commandes reçues vers les actionneurs.
+	(https://control.ros.org/jazzy/doc/ros2_controllers/forward_command_controller/doc/userdoc.html#forward-command-controller-userdoc)
+    
+						 +----------------------------+															   +---+	  +-------------------------+
+	Commande (Input)>--->|JointGroupPositionController|>--->(Output) Actionneurs	>|<		Commande (Input)>--+-->|PID|>---->|JointTrajectoryController|>--+-->(Output) Actionneurs	
+						 +----------------------------+                                     				   |   +---+	  +-------------+-----------+   |
+																											   |							|				|
+																						interpolation(linear, spline, cubic, ...etc)>-------+				|
+																											   |											|
+																											   +--------------------------------------------+
+																						
+	ex:
+		- type: position_controllers/JointGroupPositionController
+		- type: velocity_controllers/JointGroupVelocityController
+		- type: effort_controllers/JointGroupEffortController
+
+
+	Diffuseur
+	---------
+	
+						   +--------------------+								
+	Hardware (capteur)>--->|xxxSensorBroadcaster|>--->(Topic ROS2)
+						   +--------------------+    
+	ex:
+		- Hardware (capteur F/T) ---> ForceTorqueSensorBroadcaster ---> Topic ROS2 (/force_torque_sensor_broadcaster/wrench)
+		
+			force_torque_sensor_broadcaster:
+			  ros__parameters:
+				type: force_torque_sensor_broadcaster/ForceTorqueSensorBroadcaster
+				sensor_name: "ft_sensor"  # Nom du capteur tel que défini dans le hardware_interface
+				interface_names:
+				  - force.x
+				  - force.y
+				  - force.z
+				  - torque.x
+				  - torque.y
+				  - torque.z
+
+		- Hardware (IMU) ---> IMUBroadcaster ---> Topic ROS2 (/imu_broadcaster/imu_data)
+		ex: sans interfaces specifiées
+			imu_sensor_broadcaster:
+			  ros__parameters:
+				type: imu_sensor_broadcaster/IMUSensorBroadcaster
+				sensor_name: "imu_sensor"        # Nom du capteur défini dans le matériel
+				frame_id: "imu_frame"            # Cadre de référence des données IMU
+				
+				static_covariance_orientation:   # Covariance pour l'orientation
+				  [0.01, 0.0,  0.0,
+				   0.0,  0.01, 0.0,
+				   0.0,  0.0,  0.01]
+				static_covariance_angular_velocity: # Covariance pour la vitesse angulaire
+				  [0.02, 0.0,  0.0,
+				   0.0,  0.02, 0.0,
+				   0.0,  0.0,  0.02]
+				static_covariance_linear_acceleration: # Covariance pour l'accélération linéaire
+				  [0.03, 0.0,  0.0,
+				   0.0,  0.03, 0.0,
+				   0.0,  0.0,  0.03]
+		ex: Avec interfaces specifiées
+			imu_sensor_broadcaster:
+			  ros__parameters:
+				type: imu_sensor_broadcaster/IMUSensorBroadcaster
+				sensor_name: "imu_sensor"  # Nom de l'IMU dans le hardware_interface
+				frame_id: "imu_frame"      # Cadre de référence de l'IMU
+				interface_names:
+				  - orientation.x
+				  - orientation.y
+				  - orientation.z
+				  - orientation.w
+				  - angular_velocity.x
+				  - angular_velocity.y
+				  - angular_velocity.z
+				  - linear_acceleration.x
+				  - linear_acceleration.y
+				  - linear_acceleration.z
+				static_covariance_orientation:
+				  [0.01, 0.0,  0.0,
+				   0.0,  0.01, 0.0,
+				   0.0,  0.0,  0.01]
+				static_covariance_angular_velocity:
+				  [0.02, 0.0,  0.0,
+				   0.0,  0.02, 0.0,
+				   0.0,  0.0,  0.02]
+				static_covariance_linear_acceleration:
+				  [0.03, 0.0,  0.0,
+				   0.0,  0.03, 0.0,
+				   0.0,  0.0,  0.03]
+
+		
+			La covariance dans le contexte d'un IMU (Inertial Measurement Unit) représente une mesure de l'incertitude ou de la fiabilité des données mesurées par l'IMU. 
+			Elle est souvent utilisée pour informer les algorithmes de fusion de capteurs (comme un filtre de Kalman ou un SLAM) sur la précision relative des données fournies par le capteur.
+			
+			* en Math:
+				Cov(x,y) = E(x,y)-E(x)E(y)
+				Si
+					Cov(x,y)=0 => E(x,y)= E(x)E(y) donc x et y sont indépendantes(x et y sont non corrélées)
+				
+				Une matrice de covariance est une matrice symétrique qui décrit :
+					- La variance Var(x)/Var(y)
+					- Les corrélations croisées Cov(x,y)
+				
+				Démostration cas du produit scalaire :
+							 Var(u) = E[<(u - E(u))|(u - E(u))>] = E[(u - E(u))tr(u - E(u))] avec u (x,y,z)
+							 Var(u) = E[(x - E(x)),(y - E(y)),(z - E(z)) | tr((x - E(x)),(y - E(y)),(z - E(z)))]
+							 Var(u) = E[(x - E(x))^2 + (y - E(y))^2 + (z - E(z))^2] 
+								Produit scalaire dans un espace orthonormé pas de correlation entre <x|y> = <x|z> = <y|z> = 0
+								donc : Cov(x,y) = Cov(x,z) = Cov(y,z) = 0
+							 Var(u) = E[
+										x^2 - 2xE(x) + E(x)^2 +
+										y^2 - 2yE(y) + E(y)^2 +
+										z^2 - 2zE(z) + E(z)^2 
+									   ]
+							 Var(u) = E(x^2) - 2E(x)E(x) + E(x)^2 +
+									  E(y^2) - 2E(y)E(y) + E(y)^2 +
+									  E(z^2) - 2E(z)E(z) + E(z)^2
+
+							 Var(u)	= E(x^2) - E(x)^2 +
+									  E(y^2) - E(y)^2 +
+									  E(z^2) - E(z)^2 
+									
+							 Var(u)	=	|													|
+										| E(x^2) - E(x)^2		   -			   -		|
+										|		 -			E(y^2) - E(y)^2		   -		|
+										|		 -				   -		E(z^2) - E(z)^2	|
+										|													|
+							
+					En général on aurait dans un espace non orthonormé(plus général)
+							 Var(u)	=	|														|
+										| E(x^2) - E(x)^2		Cov(x,y)			Cov(x,z)	|
+										|	Cov(y,x)		E(y^2) - E(y)^2 		Cov(y,z)	|
+										|	Cov(z,x)			Cov(z,y)		E(z^2) - E(z)^2	|
+										|														|
+										
+										
+																			+(/joint_states)
+																			|
+		- Hardware (Joints) ---->Joint State Broadcaster---->Topic ROS2>----+
+																			|
+																			+(/dynamic_joint_states)
+																		 
+																			
+		- Hardware (Pose Sensor) ---->Pose Broadcaster---->Topic ROS2>---->(/pose_broadcaster/pose): geometry_msgs/msg/PoseStamped 	
+		
+		Le Pose Broadcaster est un outil ROS2 qui publie des poses mesurées (position et orientation) sous forme de messages PoseStamped et de transformations TF. 
+		Il est idéal pour intégrer des données de pose dans des systèmes de localisation, de navigation, ou des simulations avec Gazebo.
+		ex:
+			pose_broadcaster:
+			  ros__parameters:
+				type: pose_broadcaster/PoseBroadcaster # Type du diffuseur
+				pose_name: "robot_pose"                # Nom de la pose (préfixe des interfaces)
+				frame_id: "map"                        # Trame de référence (source)
+				tf.enable: true                        # Activer les transformations TF
+				tf.child_frame_id: "base_link"         # Trame cible (robot)
+				tf.publish_rate: 10.0                  # Fréquence de publication des TF en Hz
+
+
+Comment basculer (activate/deactivate) rapidement entre les contrôleurs (pratique pour le choix rapide en cas de besoin)
+------------------------------------------------------------------------------------------------------------------------
+La commande switch_controllers permet de changer les contrôleurs actifs pour un robot sans arrêter tout le système.
+C’est pratique pour passer d’un mode de contrôle à un autre (par exemple, d’un contrôle de trajectoire à un contrôle direct des positions) sans devoir redémarrer tout le robot ou le code.
+
+ros2 control switch_controllers --activate controller_1 controller_2 controller_3 --deactivate controller_4 controller_5
+
+
+Les GUI utiles pour ROS2 Control 
+---------------------------------
+	- RQT (Gestion générale des nœuds et plugins ROS.)
+		rqt
+		rqt --clear-config (effacer toutes les configurations précédentes et redémarrera RQT)
+	- RQT Graph (Visualiser la communication entre nœuds.)
+		rqt_graph
+	- RQT Controller Manager (Gestion des contrôleurs : activation, désactivation, configuration.)
+		ros2 run rqt_controller_manager rqt_controller_manager
+	- RQT Joint Trajectory Controller (Commande des trajectoires pour les joints.)
+		ros2 run rqt_joint_trajectory_controller rqt_joint_trajectory_controller
+	- RQT Reconfigure (Ajustement dynamique des paramètres des nœuds.)
+		ros2 run rqt_reconfigure rqt_reconfigure
+	- PlotJuggler (Visualisation et analyse des données en temps réel.)
+		ros2 run plotjuggler plotjuggler
+	- Urdf_to_graphviz Pour vérifier la chaîne cinématique dans un pdf
+		urdf_to_graphviz <path/file.urdf> <output_file>
+
+Voir les logs de controller_manager: (Informations plus détaillées sur les raisons pour lesquelles un contrôleur ne se charge pas)
+ros2 run controller_manager ros2_control_node --ros-args --log-level debug
+
+
+Vérifiez si l'interface matérielle est correctement chargée
+-----------------------------------------------------------
+ros2 control list_hardware_interfaces
+
+ex:
+$ros2 control list_hardware_interfaces
+
+command interfaces
+      joint1/position [available] [claimed]
+      joint2/position [available] [claimed]
+state interfaces
+      joint1/position
+      joint2/position
+Le marqueur [claimed] par interfaces de commande signifie qu'un contrôleur a accès à la commande.
+
+Une state interface peut être réclamée par plusieurs contrôleurs en même temps car elle est en lecture seule. C'est logique car plusieurs contrôleurs peuvent avoir besoin de lire la même information (comme la position d'un joint) sans créer de conflit.
+Par contre, une command interface ne peut être réclamée que par un seul contrôleur à la fois. Cela évite les conflits où plusieurs contrôleurs essaieraient de commander le même joint simultanément.
+
+Vérification du plugin d'interface matérielle personnalisée (introspection du composant matériel)
+--------------------------------------------------------------------------------------------------
+La commande "ros2 control list_hardware_components" affiche les composants matériels (joints, capteurs, moteurs) enregistrés dans le système ROS 2. 
+Elle permet de vérifier que le plugin d'interface matérielle personnalisée est bien chargé et en cours d'exécution.
+
+Les composants mock (fictifs)
+-----------------------------
+Les composants mock dans ROS 2 sont des éléments logiciels qui imitent le comportement de composants matériels réels (systèmes, capteurs, actionneurs) sans qu’il soit nécessaire d’avoir un matériel physique. 
+Ces composants simulés permettent de tester l’intégration et la configuration des contrôleurs, des fichiers de lancement et d’autres parties du framework ROS 2 sans dépendre de l’équipement réel. 
+Ils reflètent simplement les commandes envoyées (par exemple des positions ou des vitesses) en tant qu’états simulés.
+
+
+Afin d'utiliser l'architecture de ros2_control avec Gazebo, il faut vérifier si Gazebo est installé, ainsi que le paquet ros-jazzy-gz-ros2-control (sudo apt install ros-jazzy-gz-ros2-control)
+
+Un outil d'interface graphique permettant d'interagir avec les services du gestionnaire de contrôleurs afin de pouvoir changer 
+les états du cycle de vie des contrôleurs ainsi que des composants matériels.
+
+ros2 run rqt_controller_manager rqt_controller_manager
+
+!!! Attention(https://control.ros.org/jazzy/doc/ros2_control/controller_manager/doc/userdoc.html)
+-------------
+Lorsque vous avez affaire à plusieurs gestionnaires de contrôleurs,
+vous disposez de deux options pour gérer différentes descriptions de robots :
+	
+	1.	Utilisation des espaces de noms : vous pouvez placer les nœuds robot_state_publisheret les controller_managernœuds dans le même espace de noms.
+		
+		control_node = Node(
+			package="controller_manager",
+			executable="ros2_control_node",
+			parameters=[robot_controllers],
+			output="both",
+			namespace="rrbot",
+		)
+		robot_state_pub_node = Node(
+			package="robot_state_publisher",
+			executable="robot_state_publisher",
+			output="both",
+			parameters=[robot_description],
+			namespace="rrbot",
+		)
+		
+	2.	Utilisation des remappages : vous pouvez utiliser des remappages pour gérer différentes descriptions de robots. 
+		Cela implique de relayer des sujets à l'aide de la remappingsbalise, ce qui vous permet de spécifier des sujets personnalisés pour chaque gestionnaire de contrôleur.
+
+		control_node = Node(
+			package="controller_manager",
+			executable="ros2_control_node",
+			parameters=[robot_controllers],
+			output="both",
+			remappings=[('robot_description', '/rrbot/robot_description')]
+		)
+		robot_state_pub_node = Node(
+			package="robot_state_publisher",
+			executable="robot_state_publisher",
+			output="both",
+			parameters=[robot_description],
+			namespace="rrbot",
+		)
+		
+		
+	Scripts d'aide grace à spawner
+		Il existe deux scripts pour interagir avec le gestionnaire de contrôleur à partir des fichiers de lancement :
+			spawner- charge, configure et démarre un contrôleur au démarrage.
+			unspawner- arrête et décharge un contrôleur.
+			hardware_spawner- active et configure un composant matériel.
+			
+			
+			
+Ecrire une interface matérielle
+-------------------------------
+
+Pour implémenter une interface matérielle dans le cadre de ros2_control, il est essentiel de comprendre les composants matériels et les types d'interfaces associés. 
+Les composants matériels sont classés en trois catégories :
+	- Actuateurs : Dispositifs qui reçoivent des commandes pour effectuer des actions physiques.
+	- Capteurs : Dispositifs qui fournissent des données d'état sans accepter de commandes.
+	- Systèmes : Composants combinant des aspects d'actuateurs et de capteurs.
+
+
+Pour créer une nouvelle interface matérielle, suivez ces étapes :
+	1 Création de la classe d'interface :
+		- Hériter de hardware_interface::SystemInterface/hardware_interface::ActuatorInterface/hardware_interface::SensorInterface
+		- Implémenter les méthodes requises :
+			
+			on_init():
+				Cette méthode est appelée lors de l'initialisation de l'interface. 
+				Elle est utilisée pour initialiser les variables internes, allouer des ressources et effectuer toute configuration initiale nécessaire. 
+				C'est généralement ici que vous validez les paramètres de configuration fournis dans le fichier URDF.
+				
+			on_configure():
+				Appelée lors de la transition vers l'état "Configured". Cette méthode est utilisée pour configurer le matériel, 
+				établir des connexions avec les dispositifs physiques, et préparer l'interface pour l'activation. 
+				Vous pouvez y initialiser les communications avec le matériel, mais sans encore l'activer complètement.
+			
+			on_activate():			
+				Cette méthode est appelée lors de la transition vers l'état "Active". C'est ici que vous devriez activer complètement le matériel, 
+				démarrer les moteurs, initialiser les capteurs, et préparer l'interface pour les opérations de lecture et d'écriture.
+			
+			on_deactivate():
+				Appelée lors de la transition de l'état "Active" à "Inactive". Utilisez cette méthode pour désactiver en toute sécurité le matériel, 
+				arrêter les moteurs, et mettre le système dans un état de repos sûr.
+				
+			read():			
+				Cette méthode est appelée périodiquement pour lire l'état actuel du matériel. 
+				Elle devrait mettre à jour les interfaces d'état avec les dernières valeurs des capteurs, positions des moteurs, etc.
+				
+			write():
+				Également appelée périodiquement, cette méthode est utilisée pour envoyer les commandes au matériel. 
+				Elle devrait prendre les valeurs des interfaces de commande et les appliquer au matériel physique.
+			
+			export_state_interfaces():
+				Cette méthode déclare les interfaces d'état de votre matériel(Crée et expose des zones mémoire en "lecture seule" pour le contrôleur). 
+				Elle retourne un vecteur d'objets StateInterface qui représentent les valeurs que votre matériel peut rapporter, 
+				comme les positions des articulations, les vitesses, les lectures de capteurs, etc. Ces interfaces sont utilisées par le système pour lire l'état actuel du matériel.
+				(Il fournit les moyens de surveiller l'état actuel du matériel.)
+				
+			export_command_interfaces():
+				Cette méthode déclare les interfaces de commande de votre matériel(Crée et expose des zones mémoire en "écriture" indirect par le contrôleur). 
+				Elle retourne un vecteur d'objets CommandInterface qui représentent les valeurs que votre matériel peut recevoir comme commandes, 
+				telles que les positions cibles des articulations, les vitesses désirées, etc. Ces interfaces sont utilisées par le système pour envoyer des commandes au matériel.
+				(Il offre les moyens de contrôler le matériel en envoyant des commandes appropriées.)
+				
+			prepare_command_mode_switch :
+				Cette méthode prépare le système matériel à un changement imminent des interfaces de commande.
+				Elle évalue si la nouvelle combinaison d'interfaces de commande peut être acceptée et initialise les structures de données nécessaires pour le changement.
+				
+			perform_command_mode_switch :
+				Cette méthode exécute le changement de mode des interfaces de commande. 
+				Elle applique effectivement les modifications préparées par prepare_command_mode_switch pour activer et désactiver les interfaces de commande spécifiées.
+			    
+					prepare_command_mode_switch/perform_command_mode_switch c'est pendant: ros2 control switch_controllers --start controller1  controller2 --stop controllerA controllerB
+													Controller Manager → prepare_command_mode_switch()
+																			↓
+																Vérification de sécurité
+																			↓ 
+																perform_command_mode_switch()
+																			↓
+																Activation nouveau contrôleur
+																
+			export_unlisted_state_interface_descriptions() :
+				Elle permet d'exporter des descriptions d'interfaces d'état supplémentaires qui ne sont pas définies dans le fichier URDF.
+			
+			export_unlisted_command_interface_descriptions() :
+				Elle permet d'exporter des descriptions d'interfaces de commande supplémentaires qui ne sont pas définies dans le fichier URDF.
+			
+		
+													[Votre interface Matérielle (Sensor/System/Actuator)]
+																			|
+																			| export_state_interfaces()
+																			| export_command_interfaces()
+																			|
+																			v
+																[Interfaces exportées]
+																			|
+																			| gérées par
+																			v
+																	[Resource Manager]
+																			|
+																			| fournit les interfaces à
+																			v
+																	[Controller Manager]
+																			|
+																			| accorde l'accès aux
+																			v
+																	[Contrôleurs (A, B, C)]
+			
+		
+	2 Déclaration des interfaces :
+		- Utilisez declare_parameter() pour les paramètres de configuration.
+		- Déclarez les interfaces de commande et d'état avec declare_interface().
+		
+	3 Configuration :
+		- Initialisez les connexions matérielles dans on_configure().
+		- Configurez les paramètres spécifiques du matériel.
+		
+	4 Activation/Désactivation :
+		- Gérez l'activation du matériel dans on_activate().
+		- Gérez la désactivation dans on_deactivate().
+		
+	5 Lecture/Écriture :
+		- Implémentez la lecture des données du matériel dans read().
+		- Implémentez l'envoi des commandes au matériel dans write().
+		
+	6 Gestion des erreurs :
+		- Utilisez les codes de retour appropriés (return_type).
+		- Gérez les exceptions et les erreurs matérielles.
+		
+	7 Tests :
+		- Créez des tests unitaires pour valider le comportement de l'interface.
+		
+	8 Documentation :
+		- Documentez clairement l'utilisation et les spécificités de l'interface.
+
+	9 Création de la bibliothèque de plugins :
+		- Créez une bibliothèque partagée contenant votre classe d'interface.
+		- Utilisez la macro PLUGINLIB_EXPORT_CLASS pour exporter votre classe.
+
+	10 Fichier XML de plugin :
+		- Créez un fichier XML décrivant votre plugin.
+		- Incluez les informations sur la classe, la base, et le chemin de la bibliothèque.
+		- Nommez le fichier selon la convention (généralement <nom_du_package>_plugins.xml).
+	
+	11 Intégration :
+		- Créez un fichier de description URDF pour le robot.
+		- Configurez le contrôleur dans le fichier de lancement ROS 2.
+
+____________________________________________________________________________________________
+	on_export_state_interfaces() et on_export_command_interfaces() dans ROS2 Control 
+____________________________________________________________________________________________
+
++-------------------+                          +------------------+     +------------------+
+|   Robot Réel      |                          | Interface Export |     |   ROS2 Control   |
+|   (Hardware)      |                          |                  |     |                  |
+|                   |                          |  +------------+  |     | +-------------+  |
+| +---------------+ |    on_export_state       |  |ConstShrPtr |  |     | | Controllers |  |
+| |joint_state_pos| | (&std_vector_pos[id],..) |  |(READ ONLY) |  |---->| |  (READ)     |  |
+| |  (PROTECTED)  | |------------------------->|  |            |  |     | |             |  |
+| +---------------+ |=========================>|  +------------+  |     | +-------------+  |
+|                   |       [read()]           |                  |     |                  |
+|                   |                          |  +------------+  |     | +-------------+  |
+| +---------------+ |   on_export_command      |  |SharedPtr   |  |     | | Controllers |  |
+| |joint_cmd_pos  | | (&std_vector_pos[id],..) |  |(READ/WRITE)|  |<--->| |(READ/WRITE) |  |
+| |  (MODIFIABLE) | |------------------------->|  +------------+  |     | +-------------+  |
+| +---------------+ |<========================>|                  |     |                  |
++-------------------+       [write()]          +------------------+     +------------------+
+
+Explication du cycle :
+
+Dans ROS2 Control, les fonctions on_export_state_interfaces() et on_export_command_interfaces() sont exécutées une seule fois, lors de l'initialisation du matériel.
+Leur rôle est de fournir à ROS2 Control les adresses mémoire des états et des commandes, afin que le système puisse lire les états et écrire les commandes sans recréer ces interfaces à chaque itération.
+
+🔹 on_export_state_interfaces() :
+	But : Exposer les adresses mémoire des états du robot pour que ROS2 Control puisse les lire.
+	Mécanisme :
+		- Elle parcourt le vecteur joint_state_positions_ qui contient les valeurs des positions des joints.
+		- Elle crée une liste de StateInterface, où chaque élément pointe vers &joint_state_positions_[id].
+		- Elle retourne cette liste à ROS2 Control, qui pourra ensuite lire ces valeurs sans modifier car c'est un (ConstSharedPtr)
+	
+	std::vector<hardware_interface::StateInterface::ConstSharedPtr>
+	RobotSystem::on_export_state_interfaces() {
+    std::vector<hardware_interface::StateInterface::ConstSharedPtr> state_interfaces;
+    
+    for (size_t id = 0; id < joint_state_positions_.size(); ++id) {
+        state_interfaces.emplace_back(
+            std::make_shared<hardware_interface::StateInterface>(
+                joint_names_[id], hardware_interface::HW_IF_POSITION, &joint_state_positions_[id]
+            )
+        );
+    }
+    return state_interfaces;  // Exécuté une seule fois
+}
+
+ 🔹 on_export_command_interfaces() :
+	But : Exposer les adresses mémoire des commandes pour que ROS2 Control puisse modifier les valeurs envoyées au matériel.
+	Mécanisme :
+		- Elle parcourt le vecteur joint_commands_positions_, qui contient les valeurs des commandes des joints.
+		- Elle crée une liste de CommandInterface, où chaque élément pointe vers &joint_commands_positions_[id].
+		- Elle retourne cette liste à ROS2 Control, qui pourra modifier indirectement ces valeurs(SharedPtr) en y écrivant de nouvelles commandes (lors du control) et envoyer au hardware physique par un write
+
+	std::vector<hardware_interface::CommandInterface::SharedPtr>
+	RobotSystem::on_export_command_interfaces() {
+		std::vector<hardware_interface::CommandInterface::SharedPtr> command_interfaces;
+		
+		for (size_t id = 0; id < joint_commands_positions_.size(); ++id) {
+			command_interfaces.emplace_back(
+				std::make_shared<hardware_interface::CommandInterface>(
+					joint_names_[id], hardware_interface::HW_IF_POSITION, &joint_commands_positions_[id]
+				)
+			);
+		}
+		return command_interfaces;  // Exécuté une seule fois
+	}
+
+
+Ecrire un contrôleur
+---------------------
++-------------------------------------------------------------------------------------------+
+|                             CONTROLLER LIFECYCLE & FUNCTIONS                              |
++-------------------------------------------------------------------------------------------+
+
+    INIT                  CONFIGURE              ACTIVATE                 RUNNING
+ +-----------+         +--------------+       +-------------+         +-------------+
+ | on_init() |-------->|on_configure()|------>|on_activate()|-------->|   update()  |
+ +-----------+         +--------------+       +-------------+         +-------------+
+      |                      |                      |                      |
+      v                      v                      v                      v
++-----------+         +--------------+       +-------------+         +-------------+
+|• Params   |         |• Read params |       |• Safe values|         |• Read state |
+|• Memory   |         |• Setup pubs  |       |• Check      |         |• Compute    |
+|• Init vars|         |• Setup subs  |       |• Prepare    |         |• Write cmd  |
++-----------+         +--------------+       +-------------+         +-------------+
+                           |                                              ^
+                           |                                              |
+                           v                                        [Real-time]
+                   INTERFACES CONFIG                                      |
+            +--------------------------------+                    +--------------+
+            |     command_interface()         |                   |   RT Buffer  |
+            |     state_interface()           |                   | (Subscriber) |
+            |                                 |                   +--------------+
+            | • Définit interfaces requises   |                         ^
+            | • Configure les accès hardware  |                         |
+            | • Setup command/state handlers  |                   [Non Real-time]
+            +--------------------------------+                    (ROS2 Topics)
+                           |
+                           v
+                 +-------------------+
+                 |    Hardware       |
+                 |    Interface      |
+                 +-------------------+
+
+    DEACTIVATE              CLEANUP               SHUTDOWN
+ +-------------+         +-------------+       +-------------+
+ |on_deactivate|<--------| on_cleanup()|<------|on_shutdown()|
+ +-------------+         +-------------+       +-------------+
+       |                       |                     |
+       v                       v                     v
++-------------+         +-------------+       +-------------+
+|• Release    |         |• Free mem   |       |• Final      |
+|• Stop cmd   |         |• Clean res  |       |• cleanup    |
+|• Safe state |         |• Reset vars |       |• Free all   |
++-------------+         +-------------+       +-------------+
+
+                    ERROR HANDLING (peut survenir à tout moment)
+                    +----------------------------------------+
+                    |              on_error()                |
+                    |• Appelé lors d'une transition échouée  |
+                    |• Gestion des états d'erreur            |
+                    |• Retour à un état sûr                  |
+                    +----------------------------------------+
+
+Note:
+- RT Buffer gère la transition sûre Non-RT → RT
+	realtime_tools::RealtimeBuffer<T> est une structure de données optimisée pour le temps réel qui permet de stocker,
+	et d'échanger des données entre un thread temps réel et un thread non temps réel de manière sécurisée et sans blocage.
+- Les interfaces définissent les points d'accès au hardware
+- update() fonctionne en temps réel strict
+- Les états sont gérés de manière déterministe
+🔍 Fonctionnement du Publisher RT
+Contrairement à un rclcpp::Publisher<T>, un RT Publisher utilise un buffer pré-alloué qui permet d'éviter les allocations de mémoire dynamiques (qui peuvent provoquer des interruptions et des délais indéterminés dans un système temps réel).
+	ex:
+		state_publisher_ = std::make_unique<realtime_tools::RealtimePublisher<std_msgs::msg::Float64>>(
+			get_node(),
+			"~/state_pos",  // Notez le "~/" pour le namespace relatif  
+			rclcpp::SystemDefaultsQoS());
+		
+			Avec "~/":
+				"~/state_pos" -> "/robot_controller/state_pos": Topic dans le namespace du contrôleur
+
+	+---------------------------------------------------------------------+
+	|on_export_state_interfaces()    | command_interfaces_configuration() | 
+	|on_export_command_interfaces()  | state_interfaces_configuration()   |
+	|_____________________________________________________________________|
+
+┌────────────────────────────── HARDWARE ─────────────────────────────────┐
+│                                                                         │
+│    ┌──────────────┐                  ┌──────────────┐                   │
+│    │   Moteur     │                  │   Capteur    │                   │
+│    └──────▲──┬────┘                  └──────┬───────┘                   │
+│           │  │                              │                           │
+│    ┌──────┴──┴────────────────┐      ┌──────┴────────────────────┐      │
+│    │on_export_command_interf()│      │on_export_state_interf()   │      │
+│    │return SharedPtr          │      │return ConstSharedPtr      │      │
+│    └─────────┬────────────────┘      └───────────┬───────────────┘      │
+│              │                                   │                      │
+└──────────────┼───────────────────────────────────┼──────────────────────┘
+               │                                   │
+               │                                   │
+   ┌───────────┼───────────────────────────────────┼───────────────┐
+   │           │                                   │               │
+   │    ┌──────▼─────┐                      ┌──────▼─────┐         │
+   │    │ command[0] │                      │ state[0]   │         │
+   │    │ pos: 1.57  │                      │temp: 45°C  │         │
+   │    │ SharedPtr  │                      │ConstShared │         │
+   │    └────────────┘                      └────────────┘         │
+   │                                                               │
+   │                  ZONES MÉMOIRE PARTAGÉES                      │
+   │                                                               │
+   └───────────────────┬────────────────────────────┬──────────────┘
+                       │                            │
+                       │                            │
+           ┌───────────▼────────────┐  ┌────────────▼─────────┐
+           │command_interface_conf()│  │state_interface_conf()│               virtual InterfaceConfiguration state_interface_configuration() const = 0; 
+           │                        │  │                      │               virtual InterfaceConfiguration command_interface_configuration() const = 0;
+           └───────────┬────────────┘  └────────────┬─────────┘              
+                       │                            │                         Elles sont déclarées virtuelles pures car elles doivent être obligatoirement implémentées dans toute classe qui hérite de ControllerInterface.
+                       │                            │                         Le modificateur const indique que ces méthodes ne peuvent pas modifier l'état de l'objet contrôleur.  
+                ┌──────▼────────────────────────────▼─────────┐               (Le const est donc une garantie que ces méthodes ne font que COMMUNIQUER les besoins en interfaces, sans altérer le contrôleur)
+                │              CONTRÔLEUR                     │               ("liste de courses" - la liste elle-même ne modifie pas le contenu de votre frigo) (^^2
+                │                                             │
+                │  - Lit les états (state_interfaces)         │
+                │    ConstSharedPtr = Lecture seule           │
+                │  - Calcule les commandes                    │
+                │  - Écrit les commandes (cmd_interf)         │
+                │    SharedPtr = Lecture/Écriture             │
+                └─────────────────────────────────────────────┘
+
+	 ________________________
+	│                        │
+	│ Vérifier les interfaces│
+	│________________________│
+
+# Lister les interfaces hardware
+ros2 control list_hardware_interfaces
+
+# Lister les interfaces du contrôleur
+ros2 control list_controllers -v
+
+
+
+
+
+
+
+
+
+
+

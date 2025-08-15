@@ -1,0 +1,221 @@
+#!/bin/bash
+
+BUILD_CMD="colcon build"
+DEBUG_ARGS="--mixin debug"
+RELEASE_ARGS="-DCMAKE_BUILD_TYPE=Release"
+VERBOSE_ARGS="--event-handlers console_direct+"
+WARNING_ARGS="-Wno-dev -DCMAKE_CXX_FLAGS='-w' -DCMAKE_C_FLAGS='-w'"
+
+show_usage() {
+    echo -e "\nUsage: $0 [OPTIONS]"
+    echo -e "\nOptions:"
+    echo -e "\t -b, --build \t\t\t\t [Build entire workspace] (Default: Release mode)"
+    echo -e "\t -cb, --clean-build \t\t\t [Clean and build entire workspace] (Default: Release mode)"
+    echo -e "\t -bd, --build-debug \t\t\t [Build entire workspace in Debug mode]"
+    echo -e "\t -cbd, --clean-build-debug \t\t [Clean and build entire workspace in Debug mode]"
+    echo -e "\t -c, --clean \t\t\t\t [Clean the workspace]"
+    echo -e "\t -s, --symlink \t\t\t\t [Use symlinks for install]"
+    echo -e "\t -v, --verbose \t\t\t\t [Enable verbose output]"
+    echo -e "\t -nw, --no-warning \t\t\t [Disable warnings]"
+    echo -e "\t -o, --opt \"OPTIONS\" \t\t\t [Pass additional CMake options (can include multiple options)]"
+    echo -e "\t -h, --help \t\t\t\t [Show this help message]"
+    echo -e "\nExamples:"
+    echo -e "\t $0 -b \t\t\t\t\t\t [Build entire workspace] (Default: Release mode)"
+    echo -e "\t $0 -b [package] \t\t\t\t\t [Build specific package] (Default: Release mode)"
+    echo -e "\t $0 -bd \t\t\t\t\t\t [Build entire workspace in Debug mode]"
+    echo -e "\t $0 -bd [package] \t\t\t\t\t [Build specific package in Debug mode]"
+    echo -e "\t $0 -cb \t\t\t\t\t\t [Clean and rebuild entire workspace] (Default: Release mode)"
+    echo -e "\t $0 -cbd \t\t\t\t\t\t [Clean and rebuild entire workspace in Debug mode]"
+    echo -e "\t $0 -c \t\t\t\t\t\t [Clean the workspace]"
+    echo -e "\t $0 -b -s \t\t\t\t\t\t [Build with symlinks]"
+    echo -e "\t $0 -b -v \t\t\t\t\t\t [Build with verbose output]"
+    echo -e "\t $0 -b -nw \t\t\t\t\t\t [Build without warnings]"
+    echo -e "\t $0 -b [package] -s -v -nw \t\t\t\t [Build specific package with symlinks, verbose, no warnings]"
+    echo -e "\t $0 -b  -o \"ENABLE_DEBUG=ON CMAKE_CXX_FLAGS='-O3'\"  \t [Build release with additional CMake options]"
+    echo -e "\t $0 -bd -o \"ENABLE_DEBUG=ON CMAKE_CXX_FLAGS='-O3'\" \t [Build debug with additional CMake options]"
+    echo -e "\t $0 -cb -o \"ENABLE_DEBUG=ON CMAKE_CXX_FLAGS='-O3'\" \t [Clean and build release with additional CMake options]"
+    exit "$1"
+}
+
+handle_error() {
+    echo -e "\nError: $1\n"
+    exit 1
+}
+
+check_package_exists() {
+    local package="$1"
+    [ -z "$package" ] && return
+    if find . -type d | while read -r dir; do
+        if [ -f "$dir/CMakeLists.txt" ] && [ -f "$dir/package.xml" ] && [ "$(basename "$dir")" = "$package" ]; then
+            exit 0
+        fi
+    done; then
+        return
+    fi
+    handle_error "Package '$package' not found. Ensure it has CMakeLists.txt and package.xml."
+}
+
+clean_workspace() {
+    echo -e "\nCleaning the workspace...\n"
+    echo -e "Removing build, install, and log directories...\n"    
+    rm -rf build install log
+    if [ $? -ne 0 ]; then
+        handle_error "Failed to remove 'build', 'install', or 'log' directories from the root directory."
+    fi
+    echo -e "Removing temporary files with specific extensions...\n"
+    find . -maxdepth 1 \( -name "*.pdf" -o -name "*.gv" -o -name "*.out" \) -delete
+    echo -e "\nWorkspace has been successfully cleaned.\n"
+}
+
+build_workspace() {
+    local package="$1"
+    local args="$2"
+    check_package_exists "$package"
+    
+    echo -e "\n[BUILD INFO] Build arguments: $args\n"
+    
+    echo -e "\nBuilding the workspace...\n"
+    if [ -n "$package" ]; then
+        echo -e "Building specific package: $package\n"
+        $BUILD_CMD --packages-select "$package" $args
+    else
+        echo -e "Building entire workspace\n"
+        $BUILD_CMD $args
+    fi
+    if [ $? -ne 0 ]; then
+        handle_error "Failed to build the workspace."
+    fi
+    echo -e "\nWorkspace build completed successfully.\n"
+}
+
+exec() {
+    local action=""
+    local args=""
+    local package=""
+    local debug_mode=false
+    local warning_mode=false
+    local verbose_mode=false
+    local opt_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                show_usage 0
+                ;;
+            -b|--build)
+                action="build"
+                shift
+                if [[ $1 != -* ]] && [ -n "$1" ]; then
+                    package="$1"
+                    shift
+                fi
+                ;;
+            -cb|--clean-build)
+                action="clean-build"
+                shift
+                if [[ $1 != -* ]] && [ -n "$1" ]; then
+                    package="$1"
+                    shift
+                fi
+                ;;
+            -bd|--build-debug)
+                action="build"
+                debug_mode=true
+                shift
+                if [[ $1 != -* ]] && [ -n "$1" ]; then
+                    package="$1"
+                    shift
+                fi
+                ;;
+            -cbd|--clean-build-debug)
+                action="clean-build"
+                debug_mode=true
+                shift
+                if [[ $1 != -* ]] && [ -n "$1" ]; then
+                    package="$1"
+                    shift
+                fi
+                ;;
+            -c|--clean)
+                action="clean"
+                shift
+                ;;
+            -s|--symlink)
+                args+=" --symlink-install"
+                shift
+                ;;
+            -v|--verbose)
+                verbose_mode=true
+                shift
+                ;;
+            -nw|--no-warning)
+                warning_mode=true
+                shift
+                ;;
+            -o|--opt)
+                shift
+                if [ -n "$1" ]; then
+                    for opt in $1; do
+                        opt_args+=("$opt")
+                    done
+                    shift
+                else
+                    echo "No options provided for -o/--opt ${1}"
+                    show_usage 1
+                fi
+                ;;
+            *)
+                if [ -z "$package" ] && [[ $1 != -* ]]; then
+                    package="$1"
+                    shift
+                else
+                    echo "Unknown option: $1"
+                    show_usage 1
+                fi
+                ;;
+        esac
+    done
+    if [ "$debug_mode" = true ]; then
+        args+=" $DEBUG_ARGS"
+    fi
+    if [ "$verbose_mode" = true ]; then
+        args+=" $VERBOSE_ARGS"
+    fi
+    if [ -z "$action" ]; then
+        echo -e "Error: No action specified (-b, -cb, -bd, -cbd, or -c required)"
+        show_usage 1
+    fi
+
+    if [ "$debug_mode" = false ] || [ ${#opt_args[@]} -gt 0 ] || [ "$warning_mode" = true ]; then
+        args+=" --cmake-args"
+        if [ "$debug_mode" = false ]; then
+            args+=" $RELEASE_ARGS"
+        fi
+        if [ "$warning_mode" = true ]; then
+            args+=" $WARNING_ARGS"
+        fi
+        for opt in "${opt_args[@]}"; do
+            key=$(echo "$opt" | cut -d'=' -f1)
+            value=$(echo "$opt" | cut -d'=' -f2-)
+            args+=" -D$key=$value"
+        done
+    fi
+
+    case "$action" in
+        "build")
+            build_workspace "$package" "$args"
+            ;;
+        "clean-build")
+            clean_workspace
+            build_workspace "$package" "$args"
+            ;;
+        "clean")
+            clean_workspace
+            ;;
+        *)
+            handle_error "Invalid action: $action"
+            ;;
+    esac
+}
+
+exec "$@"
